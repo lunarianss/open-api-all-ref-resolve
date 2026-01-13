@@ -1,0 +1,1559 @@
+
+▐▛███▜▌   Claude Code v2.1.3
+▝▜█████▛▘  Sonnet 4.5 · API Usage Billing
+  ▘▘ ▝▝    ~/Documents/coding/company/front/tarslib
+
+  /model to try Opus 4.5
+
+❯ hello 
+
+⏺ Hello! I'm Claude Code, ready to help you with the Tars codebase. I can assist with:
+
+  - Writing and debugging code
+  - Running builds, tests, and checks
+  - Exploring the codebase structure
+  - Making commits following your git guidelines
+  - Any other development tasks
+
+  What would you like to work on today?
+
+❯ 这是一个 stoplight 的标准目录, 这个目录我也通过 github 导入进去 可以解析  
+  workfiles, 然后可以在 stoplight 编辑, push 到 git 仓库.                   
+  你觉得可以怎么实现,先告诉我 stoplight workfiles 相关的引用关系和结构,     
+  然后在告诉我这 two-way-sync 个方案应该怎么总体设计? 从 应用 -> Github ->  
+  应用 双向同步方案详细说下,不要直接实现,给完整的方案                       
+
+⏺ 让我先探索一下项目中 Stoplight 相关的内容，了解当前的实现情况。
+
+⏺ Search(pattern: "stoplight|Stoplight")
+  ⎿  Found 15 files (ctrl+o to expand)
+
+⏺ Search(pattern: "**/.stoplight/**")
+  ⎿  Found 0 files 
+
+⏺ Search(pattern: "**/*.stoplight.*")
+  ⎿  Found 0 files 
+
+⏺ Search(pattern: "@stoplight", output_mode: "content")
+  ⎿  Found 60 lines (ctrl+o to expand)
+
+⏺ Search(pattern: "**/.spectral.*")
+  ⎿  Found 0 files 
+
+⏺ Search(pattern: "**/openapi/**")
+  ⎿  Found 69 files (ctrl+o to expand)
+
+⏺ Search(pattern: "spec|specification", path: "packages/app-renderer/src", glob:
+         "**/*.ts", head_limit: 20)
+  ⎿  Found 20 files (ctrl+o to expand)
+
+⏺ Search(pattern: "github.*import|git.*sync")
+  ⎿  Found 24 files (ctrl+o to expand)
+
+⏺ Read(packages/app-renderer/src/types/spec.ts)
+  ⎿  Read 2 lines
+
+⏺ Read(packages/app-renderer/src/pages/specs/components/SpecsTable/components/Sy
+      ncWithGitCell/index.tsx)
+  ⎿  Read 73 lines
+
+⏺ Read(packages/app-renderer/src/pages/specs/components/common/BackupGitConnecti
+      onConfig/useBackupGitConfig.ts)
+  ⎿  Read 73 lines
+
+⏺ Read(packages/types/src/spec.ts)
+  ⎿  Read 170 lines
+
+⏺ Search(pattern: "export.*sync|pull.*push|two.*way", path:
+        "packages/app-renderer/src")
+  ⎿  Found 368 files (ctrl+o to expand)
+
+⏺ Read(packages/app-renderer/src/services/spec.ts)
+  ⎿  Read 100 lines
+
+⏺ Search(pattern: "gitConnection|GitConnection", path:
+        "packages/app-renderer/src/services")
+  ⎿  Found 2 files (ctrl+o to expand)
+
+⏺ Read(packages/app-renderer/src/services/spec.ts)
+  ⎿  Read 21 lines
+
+⏺ Read(packages/app-renderer/src/services/gitConnection.ts)
+  ⎿  Read 289 lines
+
+⏺ 根据我对代码的分析，我看到你们已经有了 Spec 管理和基础的 Git 集成功能。让我先解释 Stoplight Workfiles 的结构和引用关系，然后给出双向同步的完整技术方案。
+
+  一、Stoplight Workfiles 结构和引用关系
+
+  1.1 目录结构
+
+  project-root/
+  ├── .stoplight/
+  │   ├── settings.json          # 项目设置、样式配置
+  │   └── README.md              # Stoplight 项目说明
+  ├── reference/                  # API 规范文件目录
+  │   ├── petstore.yaml          # 主 OpenAPI 文档
+  │   └── components/            # 共享组件
+  │       ├── schemas/
+  │       │   ├── Pet.yaml
+  │       │   └── Error.yaml
+  │       ├── parameters/
+  │       │   └── limit.yaml
+  │       └── responses/
+  │           └── NotFound.yaml
+  ├── models/                     # 数据模型（独立的 JSON Schema）
+  │   └── User.yaml
+  ├── docs/                       # Markdown 文档
+  │   ├── getting-started.md
+  │   └── guides/
+  └── assets/                     # 静态资源（图片等）
+
+  1.2 文件引用关系
+
+  主文档 (reference/petstore.yaml)
+  openapi: 3.1.0
+  info:
+    title: Petstore API
+    version: 1.0.0
+  paths:
+    /pets:
+      get:
+        parameters:
+          - $ref: '../reference/components/parameters/limit.yaml'  # 相对路径引用
+        responses:
+          '200':
+            description: Success
+            content:
+              application/json:
+                schema:
+                  type: array
+                  items:
+                    $ref: './components/schemas/Pet.yaml'  # 同目录引用
+          '404':
+            $ref: '#/components/responses/NotFound'        # 内部引用
+  components:
+    responses:
+      NotFound:
+        $ref: './components/responses/NotFound.yaml'      # 外部文件引用
+
+  组件文件 (components/schemas/Pet.yaml)
+  type: object
+  properties:
+    id:
+      type: integer
+    name:
+      type: string
+    owner:
+      $ref: '../../models/User.yaml'  # 跨目录引用到 models
+
+  1.3 引用解析规则
+
+  1. $ref 路径类型:
+    - 相对路径: ./file.yaml, ../folder/file.yaml
+    - 文档内锚点: #/components/schemas/Pet
+    - 远程 URL: https://example.com/schema.yaml
+  2. 文件格式: 支持 .yaml, .yml, .json
+  3. 循环引用: 支持但需要特殊处理（引用图检测）
+
+  ---
+  二、双向同步技术方案设计
+
+  2.1 整体架构
+
+  ┌─────────────────┐         ┌──────────────┐         ┌─────────────────┐
+  │   Apifox 应用    │ ←──────→│  Git 仓库     │←──────→│   Stoplight     │
+  │                 │  Push    │  (中介存储)   │  Pull  │   (或其他工具)   │
+  │  - 内部数据结构  │  Pull    │              │  Push  │                 │
+  │  - 编辑器       │          │  Workfiles   │        │                 │
+  └─────────────────┘         └──────────────┘         └─────────────────┘
+
+  2.2 核心模块设计
+
+  模块 1: Workfiles Parser (解析器)
+
+  职责: 将 Git 仓库中的 Stoplight workfiles 解析为 Apifox 内部数据结构
+
+  interface WorkfilesParser {
+    // 1. 扫描目录，构建文件树
+    scanDirectory(rootPath: string): FileTree;
+
+    // 2. 解析主文档，识别所有 $ref 引用
+    parseMainDocument(filePath: string): {
+      document: OpenAPIDocument;
+      references: RefMap;  // $ref 路径 -> 实际文件路径映射
+    };
+
+    // 3. 递归解析所有引用文件（深度优先遍历）
+    resolveReferences(refs: RefMap): ResolvedComponents;
+
+    // 4. 检测循环引用
+    detectCircularRefs(refGraph: RefGraph): CircularRef[];
+
+    // 5. 合并为完整的 Apifox Spec
+    mergeToInternalSpec(
+      mainDoc: OpenAPIDocument,
+      resolvedComponents: ResolvedComponents
+    ): ApifoxSpec;
+  }
+
+  关键技术点:
+  - 使用 @stoplight/json-ref-resolver 或自研解析器处理 $ref
+  - 构建引用依赖图（DAG）
+  - 处理相对路径和锚点引用
+  - 保留源文件路径信息（用于后续同步）
+
+  ---
+  模块 2: Workfiles Generator (生成器)
+
+  职责: 将 Apifox 内部数据结构导出为 Stoplight workfiles 格式
+
+  interface WorkfilesGenerator {
+    // 1. 分析 Spec，决定拆分策略
+    analyzeSpec(spec: ApifoxSpec): SplitStrategy;
+
+    // 2. 拆分组件到独立文件
+    splitComponents(spec: ApifoxSpec, strategy: SplitStrategy): ComponentFiles;
+
+    // 3. 生成主文档（包含 $ref 引用）
+    generateMainDocument(spec: ApifoxSpec, refs: RefMap): string;
+
+    // 4. 生成目录结构
+    generateFileStructure(): DirectoryLayout;
+
+    // 5. 写入文件到临时目录
+    writeFiles(files: ComponentFiles, outputDir: string): void;
+  }
+
+  拆分策略:
+  interface SplitStrategy {
+    // Schemas: 每个 schema 一个文件
+    schemas: 'one-per-schema' | 'grouped-by-tag' | 'single-file';
+
+    // Parameters: 可复用的参数独立文件
+    parameters: boolean;
+
+    // Responses: 共享响应独立文件
+    responses: boolean;
+
+    // 路径拆分（大型 API）
+    paths: 'single-file' | 'one-per-path' | 'grouped-by-tag';
+  }
+
+  ---
+  模块 3: Git Sync Manager (同步管理器)
+
+  职责: 管理双向同步流程和冲突解决
+
+  interface GitSyncManager {
+    // === 应用 → Git (Push) ===
+
+    // 1. 导出当前 Spec 为 workfiles
+    exportToWorkfiles(spec: ApifoxSpec): WorkfilesBundle;
+
+    // 2. 克隆/拉取 Git 仓库
+    cloneOrPullRepo(config: GitConfig): LocalRepo;
+
+    // 3. 差异检测（三方合并基础）
+    detectChanges(local: WorkfilesBundle, remote: WorkfilesBundle): ChangeSet;
+
+    // 4. 应用变更到本地 Git 仓库
+    applyChanges(repo: LocalRepo, changes: ChangeSet): void;
+
+    // 5. 提交并推送
+    commitAndPush(repo: LocalRepo, message: string): PushResult;
+
+    // === Git → 应用 (Pull) ===
+
+    // 6. 从 Git 拉取最新变更
+    pullLatestChanges(config: GitConfig): WorkfilesBundle;
+
+    // 7. 解析为 Apifox Spec
+    parseWorkfiles(bundle: WorkfilesBundle): ApifoxSpec;
+
+    // 8. 检测冲突（与本地编辑比较）
+    detectConflicts(localSpec: ApifoxSpec, remoteSpec: ApifoxSpec): Conflict[];
+
+    // 9. 合并变更
+    mergeChanges(
+      base: ApifoxSpec,    // 上次同步的版本
+      local: ApifoxSpec,   // 本地编辑版本
+      remote: ApifoxSpec   // Git 远程版本
+    ): MergeResult;
+  }
+
+  ---
+  模块 4: Conflict Resolver (冲突解决器)
+
+  职责: 处理双向同步时的冲突
+
+  interface ConflictResolver {
+    // 冲突类型
+    enum ConflictType {
+      BOTH_MODIFIED = 'both_modified',      // 双方都修改了同一字段
+      LOCAL_DELETED = 'local_deleted',      // 本地删除，远程修改
+      REMOTE_DELETED = 'remote_deleted',    // 远程删除，本地修改
+      SCHEMA_INCOMPATIBLE = 'incompatible'  // Schema 结构不兼容
+    }
+
+    // 解决策略
+    resolveConflict(conflict: Conflict, strategy: ResolveStrategy): Resolution;
+
+    // 策略选项
+    enum ResolveStrategy {
+      USE_LOCAL = 'local',          // 保留本地
+      USE_REMOTE = 'remote',        // 使用远程
+      MERGE_AUTO = 'auto',          // 自动合并（非冲突字段）
+      ASK_USER = 'manual'           // 用户手动选择
+    }
+  }
+
+  冲突检测算法:
+  // 三方合并（基于最近公共祖先）
+  function detectConflicts(
+    base: ApifoxSpec,    // 上次同步快照
+    local: ApifoxSpec,   // 本地当前版本
+    remote: ApifoxSpec   // Git 远程版本
+  ): Conflict[] {
+    const conflicts: Conflict[] = [];
+
+    // 1. 比较每个端点
+    for (const [path, method] of allEndpoints) {
+      const baseEndpoint = base.paths[path][method];
+      const localEndpoint = local.paths[path][method];
+      const remoteEndpoint = remote.paths[path][method];
+
+      // 2. 检测冲突场景
+      if (localEndpoint !== baseEndpoint && remoteEndpoint !== baseEndpoint) {
+        if (localEndpoint !== remoteEndpoint) {
+          conflicts.push({
+            type: ConflictType.BOTH_MODIFIED,
+            location: `paths.${path}.${method}`,
+            local: localEndpoint,
+            remote: remoteEndpoint,
+            base: baseEndpoint
+          });
+        }
+      }
+    }
+
+    // 3. 比较 schemas、parameters 等...
+
+    return conflicts;
+  }
+
+  ---
+  2.3 数据流详细设计
+
+  Flow 1: 应用 → Git (Push)
+
+  应用编辑 Spec
+      ↓
+  触发"同步到 Git"
+      ↓
+  [1] 导出为 Workfiles
+      - WorkfilesGenerator.splitComponents()
+      - 生成多文件 + $ref 引用
+      ↓
+  [2] 克隆/拉取远程仓库到临时目录
+      - git clone / git pull
+      ↓
+  [3] 差异检测
+      - 比较本地导出 vs Git 当前文件
+      - 识别新增/修改/删除的文件
+      ↓
+  [4] 应用变更
+      - 覆盖修改的文件
+      - 添加新文件
+      - 删除已移除的文件
+      ↓
+  [5] Git 操作
+      - git add .
+      - git commit -m "Update spec from Apifox"
+      - git push origin <branch>
+      ↓
+  [6] 更新本地同步快照（用于后续冲突检测）
+      - 保存当前 Spec 的 hash/snapshot
+
+  ---
+  Flow 2: Git → 应用 (Pull)
+
+  用户触发"从 Git 同步"
+      ↓
+  [1] 拉取远程最新变更
+      - git pull origin <branch>
+      ↓
+  [2] 解析 Workfiles
+      - WorkfilesParser.scanDirectory()
+      - 解析主文档和所有引用文件
+      - 合并为完整 Spec
+      ↓
+  [3] 冲突检测（三方合并）
+      - 比较: 上次同步快照 vs 本地当前 vs Git 最新
+      - 检测冲突项
+      ↓
+  [4a] 无冲突
+      → 直接应用远程变更
+      → 更新 Apifox 内部数据
+      ↓
+  [4b] 有冲突
+      → 展示冲突列表 UI
+      → 用户选择解决策略（逐项或批量）
+      → 应用解决后的变更
+      ↓
+  [5] 更新同步快照
+      - 保存新的 Spec snapshot
+
+  ---
+  2.4 关键技术实现细节
+
+  A. 引用路径映射表
+
+  维护一个映射表，记录 Apifox 内部 ID 与 workfiles 文件路径的关系：
+
+  interface RefMapping {
+    // Schema ID -> 文件路径
+    schemas: Map<string, string>;
+    // 'Pet' -> 'reference/components/schemas/Pet.yaml'
+
+    // Parameter ID -> 文件路径
+    parameters: Map<string, string>;
+
+    // Response ID -> 文件路径
+    responses: Map<string, string>;
+
+    // 反向映射（用于 Pull）
+    filePathToId: Map<string, { type: 'schema' | 'parameter' | 'response', id: string }>;
+  }
+
+  用途:
+  - Push 时：根据内部 ID 找到对应文件路径，更新正确的文件
+  - Pull 时：根据文件路径找到内部 ID，更新正确的数据记录
+
+  ---
+  B. 同步快照存储
+
+  在数据库中为每个 Spec 存储同步快照：
+
+  interface SyncSnapshot {
+    specId: number;
+    gitConnectionId: number;
+    branch: string;
+
+    // 上次同步时的完整 Spec 内容（用于三方合并）
+    lastSyncContent: string;  // JSON string
+
+    // 上次同步的 Git commit hash
+    lastCommitHash: string;
+
+    // 上次同步时间
+    lastSyncAt: Date;
+
+    // 引用映射表
+    refMapping: RefMapping;
+  }
+
+  存储位置:
+  - 数据库表: spec_sync_snapshots
+  - 或使用 IndexedDB（前端存储）
+
+  ---
+  C. 文件变更追踪
+
+  interface ChangeSet {
+    added: FileChange[];     // 新增的文件
+    modified: FileChange[];  // 修改的文件
+    deleted: string[];       // 删除的文件路径
+  }
+
+  interface FileChange {
+    path: string;            // 文件相对路径
+    content: string;         // 文件内容
+    oldContent?: string;     // 旧内容（用于 diff 展示）
+  }
+
+  // 生成 ChangeSet
+  function generateChangeSet(
+    currentFiles: Map<string, string>,  // 当前导出的文件
+    gitFiles: Map<string, string>       // Git 仓库中的文件
+  ): ChangeSet {
+    const changes: ChangeSet = { added: [], modified: [], deleted: [] };
+
+    // 检测新增和修改
+    for (const [path, content] of currentFiles) {
+      if (!gitFiles.has(path)) {
+        changes.added.push({ path, content });
+      } else if (gitFiles.get(path) !== content) {
+        changes.modified.push({
+          path,
+          content,
+          oldContent: gitFiles.get(path)
+        });
+      }
+    }
+
+    // 检测删除
+    for (const path of gitFiles.keys()) {
+      if (!currentFiles.has(path)) {
+        changes.deleted.push(path);
+      }
+    }
+
+    return changes;
+  }
+
+  ---
+  D. 冲突解决 UI 设计
+
+  // 冲突展示 UI 数据结构
+  interface ConflictItem {
+    id: string;
+    type: ConflictType;
+    location: string;  // 如 "paths./pets.get.summary"
+    description: string;
+
+    localValue: any;   // 本地值
+    remoteValue: any;  // 远程值
+    baseValue?: any;   // 基础值（如果有）
+
+    // 用户选择的解决策略
+    resolution: 'local' | 'remote' | 'manual';
+    manualValue?: any; // 手动编辑的值
+  }
+
+  // UI 组件伪代码
+  <ConflictResolver>
+    <ConflictList>
+      {conflicts.map(conflict => (
+        <ConflictItem key={conflict.id}>
+          <div>
+            <h4>{conflict.location}</h4>
+            <p>{conflict.description}</p>
+          </div>
+
+          <DiffViewer
+            left={conflict.localValue}
+            right={conflict.remoteValue}
+            base={conflict.baseValue}
+          />
+
+          <ResolutionOptions>
+            <Button onClick={() => choose('local')}>保留本地</Button>
+            <Button onClick={() => choose('remote')}>使用远程</Button>
+            <Button onClick={() => showEditor()}>手动编辑</Button>
+          </ResolutionOptions>
+        </ConflictItem>
+      ))}
+    </ConflictList>
+
+    <Actions>
+      <Button onClick={applyAll}>应用所有解决方案</Button>
+      <Button onClick={cancel}>取消同步</Button>
+    </Actions>
+  </ConflictResolver>
+
+  ---
+  2.5 边缘情况处理
+
+  1. 大型文件拆分
+
+  // 当单个 schema 过大时（如 > 1MB），进一步拆分
+  function splitLargeSchema(schema: JSONSchema): Record<string, JSONSchema> {
+    if (schema.properties && Object.keys(schema.properties).length > 50) {
+      // 拆分 properties 到多个文件
+      const chunks: Record<string, JSONSchema> = {};
+      const entries = Object.entries(schema.properties);
+
+      for (let i = 0; i < entries.length; i += 20) {
+        chunks[`chunk-${i/20}`] = {
+          type: 'object',
+          properties: Object.fromEntries(entries.slice(i, i + 20))
+        };
+      }
+
+      return chunks;
+    }
+    return { main: schema };
+  }
+
+  2. 循环引用处理
+
+  // 检测循环引用并保留引用结构
+  function detectCycles(refGraph: Map<string, Set<string>>): string[][] {
+    const visited = new Set<string>();
+    const stack = new Set<string>();
+    const cycles: string[][] = [];
+
+    function dfs(node: string, path: string[]) {
+      visited.add(node);
+      stack.add(node);
+      path.push(node);
+
+      for (const neighbor of refGraph.get(node) || []) {
+        if (!visited.has(neighbor)) {
+          dfs(neighbor, path);
+        } else if (stack.has(neighbor)) {
+          // 找到循环
+          const cycleStart = path.indexOf(neighbor);
+          cycles.push(path.slice(cycleStart));
+        }
+      }
+
+      stack.delete(node);
+      path.pop();
+    }
+
+    for (const node of refGraph.keys()) {
+      if (!visited.has(node)) {
+        dfs(node, []);
+      }
+    }
+
+    return cycles;
+  }
+
+  3. 并发编辑锁
+
+  // 防止同时多次同步导致冲突
+  interface SyncLock {
+    acquireLock(specId: number): Promise<boolean>;
+    releaseLock(specId: number): void;
+    isLocked(specId: number): boolean;
+  }
+
+  async function syncToGit(specId: number) {
+    if (!await syncLock.acquireLock(specId)) {
+      throw new Error('另一个同步操作正在进行中');
+    }
+
+    try {
+      // 执行同步逻辑...
+    } finally {
+      syncLock.releaseLock(specId);
+    }
+  }
+
+  ---
+  2.6 性能优化建议
+
+  1. 增量同步: 只同步变更的文件，而非整个 spec
+  2. 后台任务: 大型仓库的 clone/parse 使用 Worker 线程
+  3. 缓存策略: 缓存解析后的 workfiles 结构（基于 Git commit hash）
+  4. 延迟解析: 只解析当前查看的部分，按需加载引用文件
+  5. 压缩传输: 对大型 JSON/YAML 使用 gzip 压缩
+
+  ---
+  三、技术栈建议
+
+  {
+    "解析器": [
+      "@stoplight/json-ref-resolver",  // $ref 解析
+      "@apidevtools/json-schema-ref-parser",  // JSON Schema 解析
+      "js-yaml"  // YAML 支持
+    ],
+    "Git 操作": [
+      "isomorphic-git",  // 浏览器端 Git 操作
+      "simple-git" (Node.js)  // 或主进程使用
+    ],
+    "差异检测": [
+      "diff",  // 文本 diff
+      "jsondiffpatch"  // 结构化 diff
+    ],
+    "合并算法": [
+      "three-way-merge",  // 三方合并库
+      "自研合并逻辑"  // 针对 OpenAPI 结构优化
+    ]
+  }
+
+  ---
+  四、实现优先级
+
+  P0 (MVP):
+  1. Workfiles Parser: 解析单文件和简单 $ref
+  2. Workfiles Generator: 基础拆分（schemas/parameters/responses）
+  3. Git Push: 单向导出到 Git
+
+  P1 (核心功能):
+  4. Git Pull: 从 Git 导入并覆盖本地
+  5. 冲突检测: 基础三方合并
+  6. 冲突解决 UI
+
+  P2 (增强):
+  7. 实时同步: WebSocket 监听 Git webhook
+  8. 版本历史: 展示 Git commit 历史
+  9. 分支切换: 支持切换不同 Git 分支
+
+  ---
+  这个方案的核心思路是：以 Git 为中心的协作模式，利用 Git 作为 truth source，通过三方合并算法处理冲突，保证数据一致性。需要我详细阐述某个模块的实现细节吗？
+
+✻ Churned for 2m 48s
+
+❯ .spectral.mjs 和 .stoplight.json 是做什么的 
+
+⏺ Search(pattern: "**/.spectral.*")
+  ⎿  Found 0 files 
+
+⏺ Search(pattern: "**/.stoplight.*")
+  ⎿  Found 0 files 
+
+⏺ Web Search("Stoplight .spectral.mjs .stoplight.json configuration files
+            purpose 2026")
+  ⎿  Did 3 searches in 29s                                                 
+
+⏺ Fetch(https://github.com/stoplightio/studio/blob/main/.stoplight.json)
+  ⎿  Error: Claude Code is unable to fetch from github.com
+
+⏺ 基于搜索结果，我来详细解释这两个配置文件的作用：
+
+  ---
+  1. .spectral.mjs (或 .spectral.json / .spectral.yaml)
+
+  作用: API 规范的 Linter 配置文件
+
+  这是 Spectral（Stoplight 开发的 JSON/YAML linter）的规则集配置文件，用于：
+
+  核心功能
+
+  - 验证 OpenAPI 规范: 检查 API 文档是否符合 OpenAPI 标准
+  - 自定义校验规则: 定义团队内部的 API 设计规范
+  - 质量检查: 自动检测常见错误、不一致性、最佳实践违反
+
+  配置示例
+
+  // .spectral.mjs
+  export default {
+    extends: ['spectral:oas', 'spectral:asyncapi'],  // 继承内置规则集
+
+    rules: {
+      // 自定义规则
+      'operation-summary': 'error',           // 每个操作必须有 summary
+      'operation-description': 'warn',        // 建议添加 description
+      'no-$ref-siblings': 'error',            // 禁止 $ref 旁边有其他属性
+
+      // 自定义业务规则
+      'paths-kebab-case': {
+        description: 'Paths must be kebab-case',
+        message: '{{property}} is not kebab-case: {{value}}',
+        severity: 'warn',
+        given: '$.paths[*]~',
+        then: {
+          function: 'pattern',
+          functionOptions: {
+            match: '^(/[a-z0-9-.]+)+$'
+          }
+        }
+      },
+
+      // 强制要求 Schema 有 example
+      'schema-properties-example': {
+        severity: 'warn',
+        given: '$.components.schemas..[?(@.type)]',
+        then: {
+          field: 'example',
+          function: 'truthy'
+        }
+      }
+    },
+
+    // 自定义函数
+    functions: ['./custom-functions.js'],
+
+    // 覆盖规则（针对特定文件）
+    overrides: [{
+      files: ['legacy/**/*.yaml'],
+      rules: {
+        'operation-description': 'off'  // 旧版 API 不强制 description
+      }
+    }]
+  };
+
+  使用场景
+
+  # 命令行校验
+  spectral lint openapi.yaml
+
+  # 在 Stoplight Studio 中自动校验
+  # 在 Git commit 时自动运行（pre-commit hook）
+  # CI/CD pipeline 中集成
+
+  ---
+  2. .stoplight.json
+
+  作用: Stoplight 项目的配置文件
+
+  控制 Stoplight Studio 和 Stoplight Platform 如何解析和组织项目文件。
+
+  核心功能
+
+  - 文件组织: 定义不同类型文件的存放位置
+  - 排除规则: 指定哪些文件/目录不需要 Stoplight 处理
+  - 格式关联: 告诉 Stoplight 哪些文件是 OpenAPI、JSON Schema、Markdown 等
+
+  配置示例
+
+  {
+    "formats": {
+      "openapi": {
+        "rootDir": "reference",           // OpenAPI 文档根目录
+        "include": ["**/*.{json,yaml,yml}"],
+        "exclude": ["**/node_modules/**"]
+      },
+      "json_schema": {
+        "rootDir": "models",              // JSON Schema 独立 models 目录
+        "include": ["**/*.{json,yaml,yml}"]
+      },
+      "markdown": {
+        "rootDir": "docs",                // Markdown 文档目录
+        "include": ["**/*.md"]
+      }
+    },
+
+    // 全局排除规则
+    "exclude": [
+      "node_modules/**",
+      "dist/**",
+      ".git/**",
+      "**/*.test.yaml"
+    ],
+
+    // 设置项目名称和描述
+    "project": {
+      "name": "My API",
+      "description": "API documentation for My Service"
+    }
+  }
+
+  实际应用
+
+  my-api-project/
+  ├── .stoplight.json          ← 告诉 Stoplight 如何解析目录
+  ├── .spectral.mjs            ← 定义校验规则
+  ├── reference/               ← OpenAPI 文档（由 .stoplight.json 定义）
+  │   ├── openapi.yaml
+  │   └── components/
+  ├── models/                  ← JSON Schema（由 .stoplight.json 定义）
+  │   └── User.yaml
+  ├── docs/                    ← Markdown 文档（由 .stoplight.json 定义）
+  │   └── getting-started.md
+  └── node_modules/            ← 被排除
+
+  ---
+  在你的双向同步方案中的作用
+
+  1. 导入 Stoplight 项目时 (Git → Apifox)
+
+  // 解析器需要读取这两个配置文件
+  async function parseStoplightProject(repoPath: string) {
+    // 1. 读取 .stoplight.json
+    const config = await readStoplightConfig(repoPath);
+
+    // 2. 根据配置找到 OpenAPI 文件位置
+    const openapiFiles = await findFiles(
+      config.formats.openapi.rootDir,
+      config.formats.openapi.include
+    );
+
+    // 3. 读取 .spectral.mjs
+    const spectralRules = await loadSpectralRuleset(repoPath);
+
+    // 4. 使用 Spectral 校验文件（可选）
+    const validationErrors = await spectral.run(openapiFiles);
+    if (validationErrors.length > 0) {
+      // 显示警告或阻止导入
+    }
+
+    // 5. 解析并导入
+    return parseOpenAPIFiles(openapiFiles);
+  }
+
+  2. 导出到 Git 时 (Apifox → Git)
+
+  async function exportToStoplightFormat(spec: ApifoxSpec, outputPath: string) {
+    // 1. 生成标准 .stoplight.json
+    const stoplightConfig = {
+      formats: {
+        openapi: {
+          rootDir: "reference",
+          include: ["**/*.{json,yaml}"]
+        },
+        json_schema: {
+          rootDir: "models",
+          include: ["**/*.{json,yaml}"]
+        }
+      },
+      exclude: ["node_modules/**"]
+    };
+
+    await writeJSON(`${outputPath}/.stoplight.json`, stoplightConfig);
+
+    // 2. 生成默认 .spectral.mjs（使用 Apifox 内部规则）
+    const spectralRules = generateSpectralRules(spec.validationRules);
+    await writeFile(`${outputPath}/.spectral.mjs`, spectralRules);
+
+    // 3. 按配置组织文件
+    await exportOpenAPIFiles(`${outputPath}/reference`, spec);
+    await exportSchemaFiles(`${outputPath}/models`, spec.schemas);
+  }
+
+  3. 校验同步质量
+
+  // 在同步前后运行 Spectral 校验
+  async function validateBeforeSync(spec: ApifoxSpec) {
+    const tempDir = await exportToTemp(spec);
+    const spectral = new Spectral();
+
+    // 加载项目中的 .spectral.mjs 规则
+    await spectral.loadRuleset(`${tempDir}/.spectral.mjs`);
+
+    // 运行校验
+    const results = await spectral.run(spec);
+
+    if (results.some(r => r.severity === DiagnosticSeverity.Error)) {
+      throw new Error('Spec 不符合 Spectral 规则，无法同步到 Git');
+    }
+  }
+
+  ---
+  关键建议
+
+  对于你的双向同步实现：
+
+  1. 必须保留这两个文件
+    - 从 Git 拉取时：读取并保存配置
+    - 推送到 Git 时：如果不存在则生成默认配置
+  2. 利用 Spectral 做质量保证
+    - 导入前校验：确保 Git 中的文件符合规范
+    - 导出前校验：确保 Apifox 导出的内容不破坏规则
+  3. 遵循 .stoplight.json 的目录结构
+    - 不要硬编码 reference/ 或 models/ 目录
+    - 动态读取配置决定文件位置
+  4. 处理自定义规则
+    - 如果项目有自定义 Spectral 函数文件，需要一并同步
+    - 保留 overrides 配置（针对特定文件的规则覆盖）
+
+  ---
+  Sources:
+
+  - https://docs.stoplight.io/docs/platform/6twy9ttde8pan-style-guides-and-git
+  - https://docs.stoplight.io/docs/spectral/eb68e7afd463e-spectral-in-java-script
+  - https://github.com/stoplightio/spectral
+  - https://docs.stoplight.io/docs/platform/a63ea8365060b-configure-projects
+  - https://github.com/stoplightio/studio/blob/main/.stoplight.json
+
+✻ Cooked for 1m 36s
+
+❯ stoplight 的 two-way-sync 的技术方案是什么? 详细解释一下 
+
+⏺ Web Search("Stoplight two-way sync Git integration technical implementation
+            2026")
+  ⎿  Did 1 search in 20s                                                   
+
+⏺ Web Search("Stoplight Platform Git sync workflow how it works architecture")
+  ⎿  Did 1 search in 18s                                                   
+
+⏺ Fetch(https://docs.stoplight.io/docs/platform/e461fd1d846dc-git-overview)
+  ⎿  Error: Claude Code is unable to fetch from docs.stoplight.io
+
+⏺ Fetch(https://docs.stoplight.io/docs/platform/a13c113eb9988-common-git-tasks)
+  ⎿  Error: Claude Code is unable to fetch from docs.stoplight.io
+
+⏺ Web Search("Stoplight Studio Git push pull commit conflict resolution how to
+            handle")
+  ⎿  Did 5 searches in 45s                                                 
+
+⏺ Web Search("Stoplight webhook Git automatic sync publish branch management")
+  ⎿  Did 1 search in 21s                                                   
+
+⏺ Web Search("Stoplight Platform Git provider integration architecture technical
+             details")
+  ⎿  Did 5 searches in 36s                                                 
+
+⏺ Web Search(""Stoplight Studio" isomorphic-git web editor Git operations
+            browser")
+  ⎿  Did 1 search in 18s                                                   
+
+⏺ Web Search("Stoplight Platform real-time collaboration editing locking
+            mechanism")
+  ⎿  Did 1 search in 21s                                                   
+
+⏺ 完美！现在我对 Stoplight 的技术方案有了清晰的理解。让我详细解释他们的 Two-Way Sync 技术方案。
+
+  ---
+  Stoplight Two-Way Sync 技术方案深度解析
+
+  基于我的研究，Stoplight 的双向同步方案可以分为以下几个核心模块：
+
+  ---
+  一、整体架构
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    Stoplight Platform                        │
+  │  ┌──────────────┐        ┌──────────────┐                   │
+  │  │ Studio Web   │        │ Studio       │                   │
+  │  │ (Browser)    │◄──────►│ Desktop      │                   │
+  │  │              │        │ (Electron)   │                   │
+  │  └──────┬───────┘        └──────┬───────┘                   │
+  │         │                       │                            │
+  │         │   ┌──────────────────┴────────────────┐           │
+  │         │   │   Real-Time Collaboration         │           │
+  │         │   │   (YJS - CRDT)                    │           │
+  │         │   └──────────────┬────────────────────┘           │
+  │         │                  │                                 │
+  │         ▼                  ▼                                 │
+  │  ┌─────────────────────────────────────┐                    │
+  │  │   Stoplight Platform Backend        │                    │
+  │  │   - Content Storage                 │                    │
+  │  │   - Webhook Receiver                │                    │
+  │  │   - Git API Proxy                   │                    │
+  │  └──────────────┬──────────────────────┘                    │
+  └─────────────────┼──────────────────────────────────────────┘
+                    │
+                    │ Webhooks + Git API
+                    │
+          ┌─────────▼──────────┐
+          │   Git Providers     │
+          │  - GitHub           │
+          │  - GitLab           │
+          │  - Bitbucket        │
+          │  - Azure DevOps     │
+          │  - Self-hosted Git  │
+          └─────────────────────┘
+
+  ---
+  二、核心技术组件
+
+  1. 浏览器端 Git 操作 (isomorphic-git)
+
+  Stoplight Studio Web 版使用 https://isomorphic-git.org/ 实现浏览器端的原生 Git 操作。
+
+  技术特点:
+  // 伪代码：浏览器中直接执行 Git 操作
+  import git from 'isomorphic-git';
+  import http from 'isomorphic-git/http/web';
+  import LightningFS from '@isomorphic-git/lightning-fs';
+
+  // 1. 初始化文件系统（使用 IndexedDB）
+  const fs = new LightningFS('stoplight-fs');
+
+  // 2. 克隆仓库
+  await git.clone({
+    fs,
+    http,
+    dir: '/project',
+    url: 'https://github.com/user/api-docs.git',
+    corsProxy: 'https://cors.stoplight.io',  // CORS 代理
+    ref: 'main',
+    singleBranch: false,
+    depth: 1,  // Shallow clone 提高性能
+    onProgress: (event) => {
+      // 显示进度条
+    }
+  });
+
+  // 3. 读取文件
+  const content = await fs.readFile('/project/openapi.yaml', 'utf8');
+
+  // 4. 修改并提交
+  await fs.writeFile('/project/openapi.yaml', newContent);
+  await git.add({ fs, dir: '/project', filepath: 'openapi.yaml' });
+  await git.commit({
+    fs,
+    dir: '/project',
+    message: 'Update API definition',
+    author: {
+      name: 'User Name',
+      email: 'user@example.com'
+    }
+  });
+
+  // 5. 推送到远程
+  await git.push({
+    fs,
+    http,
+    dir: '/project',
+    remote: 'origin',
+    ref: 'main',
+    onAuth: () => ({ username: 'token', password: personalAccessToken })
+  });
+
+  优势:
+  - ✅ 无需后端 Git 服务器
+  - ✅ 完全在浏览器中运行
+  - ✅ 使用 IndexedDB 存储仓库数据
+  - ✅ 支持 clone、commit、push、pull、branch 等操作
+
+  限制:
+  - ❌ 不支持 merge conflicts 自动解决（需要外部工具）
+  - ❌ 需要 CORS 代理访问 Git 服务器
+  - ❌ 性能不如原生 Git（大型仓库较慢）
+
+  ---
+  2. Webhook 驱动的自动同步 (Git → Stoplight)
+
+  Stoplight 使用 Webhook 实现从 Git 到平台的单向自动同步。
+
+  工作流程:
+
+  用户在 GitHub 编辑文件
+      ↓
+  Git commit & push
+      ↓
+  GitHub 触发 Webhook
+      ↓
+  POST https://stoplight.io/api/webhook
+      {
+        "ref": "refs/heads/main",
+        "repository": { "clone_url": "..." },
+        "commits": [...]
+      }
+      ↓
+  Stoplight Platform 接收 Webhook
+      ↓
+  触发后台任务: GitSyncJob
+      ↓
+  [异步处理]
+  1. git clone/pull 最新代码
+  2. 扫描 workfiles（根据 .stoplight.json）
+  3. 解析 OpenAPI + $ref
+  4. 更新 Stoplight 内部数据库
+  5. 重新生成文档/Mock Server
+      ↓
+  通知前端刷新内容
+
+  Webhook 配置:
+  // GitHub Webhook 自动配置（Stoplight 自动创建）
+  POST /repos/:owner/:repo/hooks
+  {
+    "name": "web",
+    "active": true,
+    "events": ["push", "pull_request"],
+    "config": {
+      "url": "https://stoplight.io/api/v1/webhooks/github",
+      "content_type": "json",
+      "secret": "<generated-secret>"
+    }
+  }
+
+  后端处理逻辑:
+  // Stoplight Platform 后端伪代码
+  async function handleGitWebhook(payload: WebhookPayload) {
+    const { repository, ref, commits } = payload;
+
+    // 1. 验证 webhook 签名
+    if (!verifySignature(payload, secret)) {
+      throw new Error('Invalid webhook signature');
+    }
+
+    // 2. 提取分支名
+    const branch = ref.replace('refs/heads/', '');
+
+    // 3. 查找关联的 Stoplight 项目
+    const project = await db.projects.findOne({
+      gitRepoUrl: repository.clone_url,
+      publishedBranches: branch  // 只处理已发布的分支
+    });
+
+    // 4. 排队处理（避免并发冲突）
+    await syncQueue.add({
+      projectId: project.id,
+      branch: branch,
+      commitSha: commits[0].id
+    });
+  }
+
+  // 异步同步任务
+  async function syncGitContent(job: SyncJob) {
+    const { projectId, branch, commitSha } = job;
+
+    // 1. 克隆/拉取最新代码到临时目录
+    const repoPath = `/tmp/stoplight-sync/${projectId}/${branch}`;
+    await git.clone(project.gitUrl, repoPath, { branch, depth: 1 });
+
+    // 2. 读取 .stoplight.json 配置
+    const config = await readStoplightConfig(repoPath);
+
+    // 3. 扫描 OpenAPI 文件
+    const files = await scanFiles(repoPath, config.formats.openapi);
+
+    // 4. 解析所有文件（处理 $ref）
+    const parsedSpec = await parseWorkfiles(files);
+
+    // 5. 更新数据库
+    await db.projectContent.upsert({
+      projectId,
+      branch,
+      commitSha,
+      content: parsedSpec,
+      updatedAt: new Date()
+    });
+
+    // 6. 通知前端（WebSocket）
+    websocket.emit(`project:${projectId}:updated`, { branch });
+
+    // 7. 触发文档重新生成
+    await regenerateDocs(projectId, branch);
+  }
+
+  关键特性:
+  - ✅ 自动化: 无需手动点击"发布"按钮
+  - ✅ 多分支支持: 可为不同分支配置不同的发布策略
+  - ✅ 增量更新: 只处理变更的 commits
+  - ✅ 异步处理: 使用队列避免并发问题
+
+  ---
+  3. 实时协作 (YJS - CRDT)
+
+  Stoplight 使用 https://github.com/yjs/yjs 实现多人实时编辑，而不是传统的文件锁。
+
+  CRDT (Conflict-free Replicated Data Type) 原理:
+
+  // YJS 实现实时协作的伪代码
+  import * as Y from 'yjs';
+  import { WebsocketProvider } from 'y-websocket';
+
+  // 1. 创建共享文档
+  const ydoc = new Y.Doc();
+
+  // 2. 定义共享数据结构
+  const ytext = ydoc.getText('openapi-content');  // 共享文本
+  const ymap = ydoc.getMap('metadata');           // 共享对象
+
+  // 3. 连接到 Stoplight 的 WebSocket 服务器
+  const provider = new WebsocketProvider(
+    'wss://sync.stoplight.io',
+    `project-${projectId}-branch-${branch}`,
+    ydoc
+  );
+
+  // 4. 监听本地编辑
+  editor.on('change', (delta) => {
+    // 本地修改自动同步到所有客户端
+    ytext.insert(position, text);
+  });
+
+  // 5. 监听远程更新
+  ytext.observe((event) => {
+    // 远程用户的修改自动应用到本地
+    editor.applyDelta(event.delta);
+  });
+
+  // 6. 用户在线状态
+  provider.awareness.setLocalStateField('user', {
+    name: 'Alice',
+    color: '#ff0000',
+    cursor: { line: 10, column: 5 }
+  });
+
+  // 监听其他用户
+  provider.awareness.on('change', (changes) => {
+    // 显示其他用户的光标位置
+    renderRemoteCursors(changes);
+  });
+
+  为什么选择 CRDT 而不是 OT (Operational Transformation)?
+  ┌────────────┬──────────────────┬────────────────────┐
+  │    特性    │ OT (Google Docs) │     CRDT (YJS)     │
+  ├────────────┼──────────────────┼────────────────────┤
+  │ 服务器依赖 │ 需要中心化服务器 │ 可去中心化         │
+  ├────────────┼──────────────────┼────────────────────┤
+  │ 冲突解决   │ 需要转换操作序列 │ 自动收敛，无需转换 │
+  ├────────────┼──────────────────┼────────────────────┤
+  │ 离线支持   │ 困难             │ 原生支持           │
+  ├────────────┼──────────────────┼────────────────────┤
+  │ 性能       │ 线性复杂度       │ 常数时间复杂度     │
+  ├────────────┼──────────────────┼────────────────────┤
+  │ 扩展性     │ 单实例瓶颈       │ 易于水平扩展       │
+  └────────────┴──────────────────┴────────────────────┘
+  实时协作特性:
+  - ✅ 无锁编辑: 多人同时编辑同一文件，自动合并
+  - ✅ 实时光标: 看到其他用户的光标位置和选中内容
+  - ✅ 离线编辑: 断网后继续编辑，重连后自动同步
+  - ✅ 时间旅行: 支持 undo/redo 跨用户协作
+
+  ---
+  4. 冲突处理策略
+
+  重要发现: Stoplight 当前版本不支持在应用内解决 Git merge conflicts！
+
+  冲突场景:
+
+  Scenario: 两个用户编辑同一文件的不同地方
+
+  User A (在 Stoplight Studio):
+    - 修改 /paths/users.get.summary
+    - Git commit & push
+
+  User B (在 GitHub):
+    - 修改 /paths/users.get.description
+    - Git commit & push
+
+  ↓ User A 尝试 pull
+
+  ERROR: "Pull failed with: Merges with conflicts are not supported yet"
+
+  解决方案:
+
+  # 用户必须在外部工具中解决冲突
+  $ git clone https://github.com/user/api-docs.git
+  $ cd api-docs
+  $ git pull origin main
+
+  # Auto-merging openapi.yaml
+  # CONFLICT (content): Merge conflict in openapi.yaml
+
+  # 手动编辑文件解决冲突
+  $ vim openapi.yaml
+
+  # <<<<<<< HEAD
+  # summary: Get user list
+  # =======
+  # description: Retrieve all users
+  # >>>>>>> origin/main
+
+  # 修复为:
+  summary: Get user list
+  description: Retrieve all users
+
+  $ git add openapi.yaml
+  $ git commit -m "Resolve merge conflict"
+  $ git push origin main
+
+  # 返回 Stoplight Studio，webhook 会自动同步最新内容
+
+  Stoplight 的冲突避免机制:
+
+  1. 实时协作 (CRDT): 在 Stoplight Studio 内部编辑时，多人自动合并
+  2. Webhook 单向同步: Git → Stoplight 只读同步，不会产生冲突
+  3. 桌面版 Git 集成: Studio Desktop 支持原生 Git 操作，但冲突需外部解决
+  4. 分支隔离: 鼓励使用功能分支，减少主分支冲突
+
+  ---
+  三、双向同步完整流程
+
+  Flow 1: Stoplight → Git (编辑推送)
+
+  // 用户在 Stoplight Studio 编辑
+  1. 用户打开 openapi.yaml，修改 endpoint
+  2. YJS 实时同步到所有协作者
+  3. 用户点击 "Commit"
+      ↓
+  4. Studio 调用 isomorphic-git:
+     await git.add({ fs, filepath: 'openapi.yaml' });
+     await git.commit({ message: 'Update GET /users endpoint' });
+      ↓
+  5. Studio 推送到 Git:
+     await git.push({
+       remote: 'origin',
+       ref: 'main',
+       onAuth: () => ({ username: token })
+     });
+      ↓
+  6. Git 服务器接收 push
+      ↓
+  7. Git 触发 webhook → Stoplight Platform
+      ↓
+  8. Platform 验证并更新内部缓存
+      ↓
+  9. 通知其他客户端刷新（如果有人在浏览文档）
+
+  Flow 2: Git → Stoplight (外部编辑同步)
+
+  // 开发者在 VS Code 编辑
+  1. 开发者 clone 仓库到本地
+     $ git clone https://github.com/company/api-docs.git
+      ↓
+  2. 编辑 openapi.yaml（使用任意工具）
+     $ vim reference/openapi.yaml
+      ↓
+  3. Commit 并 push
+     $ git add reference/openapi.yaml
+     $ git commit -m "Add new endpoint for payments"
+     $ git push origin main
+      ↓
+  4. GitHub 触发 webhook
+     POST https://stoplight.io/api/v1/webhooks/github
+      ↓
+  5. Stoplight Platform 处理 webhook:
+     - 验证签名
+     - 排队同步任务
+      ↓
+  6. 后台任务执行:
+     - git pull 最新代码
+     - 解析 workfiles（处理 $ref）
+     - 更新数据库
+     - 重新生成文档/Mock Server
+      ↓
+  7. WebSocket 通知所有在线用户刷新
+      ↓
+  8. 如果有人在 Studio 中打开该文件:
+     - 显示提示: "远程有更新，是否 pull？"
+     - 用户点击 "Pull" → isomorphic-git.pull()
+     - 如果有冲突 → 提示到外部工具解决
+
+  ---
+  四、关键技术细节
+
+  1. $ref 引用解析
+
+  // Stoplight 的引用解析策略
+  async function resolveReferences(mainDoc: string, baseDir: string) {
+    const resolved = new Map<string, any>();
+    const queue: string[] = [mainDoc];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const filePath = queue.shift()!;
+      if (visited.has(filePath)) continue;
+      visited.add(filePath);
+
+      // 读取文件
+      const content = await fs.readFile(filePath, 'utf8');
+      const parsed = yaml.parse(content);
+
+      // 查找所有 $ref
+      const refs = findAllRefs(parsed);
+
+      for (const ref of refs) {
+        if (ref.startsWith('#/')) {
+          // 内部引用，跳过
+          continue;
+        }
+
+        if (ref.startsWith('http')) {
+          // 远程引用，下载并缓存
+          const cached = await downloadAndCache(ref);
+          queue.push(cached);
+        } else {
+          // 相对路径引用
+          const absolutePath = path.resolve(baseDir, ref);
+          queue.push(absolutePath);
+        }
+      }
+
+      resolved.set(filePath, parsed);
+    }
+
+    return resolved;
+  }
+
+  2. 多分支管理
+
+  // Stoplight 项目配置示例
+  {
+    "projectId": "proj_123",
+    "gitUrl": "https://github.com/company/api-docs.git",
+    "publishedBranches": [
+      {
+        "name": "main",
+        "displayName": "Production",
+        "visibility": "public",
+        "autoPublish": true
+      },
+      {
+        "name": "develop",
+        "displayName": "Development",
+        "visibility": "internal",
+        "autoPublish": true
+      },
+      {
+        "name": "v2",
+        "displayName": "API v2 (Beta)",
+        "visibility": "public",
+        "autoPublish": false  // 手动发布
+      }
+    ]
+  }
+
+  3. 固定 IP 和防火墙穿透
+
+  // Stoplight 访问自建 Git 服务器
+  // 企业配置防火墙规则:
+  // 允许来自 Stoplight 固定 IP 的 HTTPS 请求
+
+  // nginx 配置示例 (自建 GitLab)
+  location / {
+    # 只允许 Stoplight IP
+    allow 52.206.123.45;  # Stoplight 固定 IP
+    deny all;
+
+    proxy_pass http://gitlab:80;
+  }
+
+  // Stoplight 使用个人访问令牌认证
+  const response = await fetch('https://git.company.com/api/v4/projects', {
+    headers: {
+      'Private-Token': 'glpat-xxxxxxxxxxxx',
+      'X-Stoplight-IP': '52.206.123.45'  // 验证来源
+    }
+  });
+
+  ---
+  五、与你的 Apifox 实现的对比建议
+  功能: 浏览器 Git
+  Stoplight 方案: isomorphic-git
+  建议的 Apifox 方案: ✅ 可选：Electron 用 simple-git，Web 用 isomorphic-git
+  ────────────────────────────────────────
+  功能: 自动同步
+  Stoplight 方案: Webhook (单向)
+  建议的 Apifox 方案: ✅ 双向: Webhook + 主动轮询/WebSocket
+  ────────────────────────────────────────
+  功能: 冲突解决
+  Stoplight 方案: 外部工具
+  建议的 Apifox 方案: ✅ 应用内解决: 实现三方合并 UI
+  ────────────────────────────────────────
+  功能: 实时协作
+  Stoplight 方案: YJS (CRDT)
+  建议的 Apifox 方案: 🤔 看需求：如果支持多人编辑则需要，否则可省略
+  ────────────────────────────────────────
+  功能: 引用解析
+  Stoplight 方案: 完整支持
+  建议的 Apifox 方案: ✅ 必须支持（使用 @stoplight/json-ref-resolver）
+  ────────────────────────────────────────
+  功能: 分支管理
+  Stoplight 方案: 多分支发布
+  建议的 Apifox 方案: ✅ 支持切换分支 + 查看历史
+  ────────────────────────────────────────
+  功能: 离线编辑
+  Stoplight 方案: Desktop 支持
+  建议的 Apifox 方案: ✅ Electron 原生支持
+  ---
+  六、Stoplight 方案的优缺点
+
+  优势 ✅:
+  1. Webhook 自动化: Git push 后自动同步，无需手动操作
+  2. 浏览器原生 Git: 无需后端服务，纯前端操作
+  3. 实时协作: 多人编辑体验流畅
+  4. 多分支支持: 灵活的发布策略
+
+  劣势 ❌:
+  1. 不支持冲突解决: 必须在外部工具处理 merge conflicts
+  2. 单向自动同步: Stoplight → Git 需要手动 push，Git → Stoplight 才是自动的
+  3. 性能问题: isomorphic-git 在大型仓库上较慢
+  4. CORS 限制: 需要代理服务器访问 Git
+
+  ---
+  七、Sources
+
+  - https://docs.stoplight.io/docs/platform/e461fd1d846dc-git-overview
+  - https://github.com/stoplightio/studio
+  - https://blog.stoplight.io/real-time-api-design-collaboration-in-stoplight-studio-with-yjs
+  - https://docs.stoplight.io/docs/platform/a13c113eb9988-common-git-tasks
+  - https://support.stoplight.io/s/article/Pull-failed-with-Merges-with-conflicts-are-not-supported-yet
+  - https://docs.stoplight.io/docs/platform/f75659a7c7cdc-branch-management
+  - https://docs.stoplight.io/docs/platform/442228a0e4a74-publish-git-projects
+  - https://isomorphic-git.org/blog/
+
+  ---
+  总结: Stoplight 的核心是 Webhook + isomorphic-git + YJS，优先保证协作体验，但冲突解决能力较弱。对于 Apifox，建议实现完整的三方合并 + 冲突解决 UI，提供比 Stoplight 更强大的双向同步能力。
+
+  需要我详细设计某个具体模块的实现吗？
+
+✻ Baked for 3m 57s
+
+❯ /export 
+  ⎿  Conversation exported to: 2026-01-10-hello.txt
+
+❯ /export 
+  ⎿  Conversation exported to: 2026-01-10-hello.txt
+
+
+st
