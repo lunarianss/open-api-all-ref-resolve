@@ -1,35 +1,149 @@
 {
-  "post": {
-    "summary": "Create New User Rerfence",
-    "operationId": "post-user",
-    "responses": {
-      "200": {
-        "description": "User Created",
-        "content": {
-          "application/json": {
+  "swagger": "2.0",
+  "info": {
+    "title": "Product API",
+    "description": "API for managing products (OAS 2.0)",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Team",
+      "email": "api@example.com"
+    }
+  },
+  "host": "api.example.com",
+  "basePath": "/v1",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "paths": {
+    "/products": {
+      "get": {
+        "summary": "Get all products",
+        "description": "Returns a list of products",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Filter by category",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of products to return",
+            "type": "integer",
+            "default": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
             "schema": {
-              "$ref": "../../components/deep/nested/very/deep/DeepSchema.json"
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Product"
+              }
             }
           }
         }
       },
-      "400": {
-        "description": "Missing Required Information"
-      },
-      "409": {
-        "description": "Email Already Taken"
-      }
-    },
-    "requestBody": {
-      "content": {
-        "application/json": {
-          "schema": {
-            "$ref": "../../api/schema/Additional.json"
+      "post": {
+        "summary": "Create a new product",
+        "parameters": [
+          {
+            "name": "product",
+            "in": "body",
+            "description": "Product object to create",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProductCreate"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Product created successfully"
           }
         }
-      },
-      "description": "Post the necessary fields for the API to create a new user."
+      }
     },
-    "description": "Create a new user."
+    "/products/{id}": {
+      "get": {
+        "summary": "Get product by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product found",
+            "schema": {
+              "$ref": "#/definitions/Product"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Product": {
+      "type": "object",
+      "required": ["id", "name", "price"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number",
+          "format": "float"
+        },
+        "category": {
+          "type": "string"
+        },
+        "inStock": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "ProductCreate": {
+      "type": "object",
+      "required": ["name", "price"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number"
+        },
+        "category": {
+          "type": "string"
+        }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
   }
 }

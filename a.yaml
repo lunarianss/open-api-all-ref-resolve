@@ -1,0 +1,137 @@
+openapi: 3.1.0
+info:
+  title: User Management API
+  description: API for managing users (OAS 3.1)
+  version: 1.0.0
+  summary: A modern API with JSON Schema 2020-12 support
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: https://staging-api.example.com/v1
+    description: Staging server
+webhooks:
+  user.created:
+    post:
+      summary: Webhook for new user creation
+      description: Triggered when a new user is created
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/User"
+      responses:
+        200:
+          description: Webhook processed successfully
+paths:
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Get all users
+      description: Returns a list of all users with pagination
+      parameters:
+        - name: limit
+          in: query
+          description: Number of users to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          description: Pagination cursor
+          schema:
+            type: string
+      responses:
+        200:
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+              examples:
+                success:
+                  value:
+                    users: []
+                    nextCursor: null
+components:
+  schemas:
+    User:
+      $schema: https://json-schema.org/draft/2020-12/schema
+      $id: User
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional user metadata
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      unevaluatedProperties: false
+    UserList:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        nextCursor:
+          type: [string, "null"]
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://example.com/oauth/authorize
+          tokenUrl: https://example.com/oauth/token
+          scopes:
+            users:read: Read users
+            users:write: Write users
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+security:
+  - OAuth2: [users:read, users:write]
