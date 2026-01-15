@@ -1,19 +1,25 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "Product API",
+    "title": "Product AP222I",
     "description": "API for managing products (OAS 2.0)",
     "version": "1.0.0",
-    "contact": {
+    "contact": {sss
       "name": "API Team",
       "email": "api@example.com"
     }
   },
   "host": "api.example.com",
   "basePath": "/v1",
-  "schemes": ["https"],
-  "consumes": ["application/json"],
-  "produces": ["application/json"],
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
   "paths": {
     "/products": {
       "get": {
@@ -91,7 +97,11 @@
   "definitions": {
     "Product": {
       "type": "object",
-      "required": ["id", "name", "price"],
+      "required": [
+        "id",
+        "name",
+        "price"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -118,7 +128,10 @@
     },
     "ProductCreate": {
       "type": "object",
-      "required": ["name", "price"],
+      "required": [
+        "name",
+        "price"
+      ],
       "properties": {
         "name": {
           "type": "string"
