@@ -1,0 +1,23 @@
+
+{
+  "name": "示例JSON",
+  "description": "这是一个包含数组的JSON示例",
+  "integerArray": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "stringArray": ["apple","banana","cherry"],
+  "nestedArray": [
+    {
+      "id": 101,
+      "value": "第一项"
+    },
+    {
+      "id": 102,
+      "value": "第二项"
+    }
+  ]
+}
